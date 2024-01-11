@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <title>the_option_name</title>
+  <style>
+    .code {
+      font-family: monospace;
+      white-space: pre;
+      vertical-align: top;
+      padding: 0px 20px 15px 20px;
+      border: 2px solid grey;
+    }
+  </style>
+</head>
+<body style="color:white;background-color:black;">
+<table><tr>
+  <th>Source not formated</th>
+  <th>Source formated</th>
+</tr><tr><td class="code">
+  void
+  main (int argc , char** argv )
+  { puts("Hello!"
+  );}
+</td><td class="code">
+  <span style="color:red;background-color:blue;">void</span> main(int argc, char** argv) {
+      puts("Hello!");
+  }
+</td></tr></table>
+</body>
+</html>
+
+<!-- HOW TO: PLEASE READ
+ 1) Don't forget to name this file the_option_name.html
+ 2) In the <title> replace 'the_option_name' by the real option name
+ 3) Replace the current example by an short example showing the effect of the_option_name
+    If this help, you can use colors in the unformat/formated code
+    <span style="color:XXXX;background-color:XXXX;">...<span>
+ 4) Test the file
+ 5) Remove this comment
+ 6) Make sure that the diff between the template downloaded and the final file concerns only 4 blocks:
+     - the name of the option in the <title> line
+     - the not formated code
+     - the formated code
+     - this comment
+ 7) Create a pull request here: https://github.com/JEAYNE/jeayne.github.io/pulls
+ Thanks you!
+-->
