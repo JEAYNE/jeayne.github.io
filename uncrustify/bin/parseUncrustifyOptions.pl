@@ -39,6 +39,7 @@ sub getOption {
     || Fatal("Can't exec '$ucBin'\n$!");
   my $result=<PIPE>;
   close(PIPE);
+  chomp($result);
   return $result;
 }
 
@@ -48,8 +49,10 @@ sub getOption {
 
 $|=1;
 my $binDir  = '';
-my %options;
 my $outputDir;
+my %options;     # a hash of hash   Used to collect info and then sort options by name
+my %categories;  # a hash of array  Used to sort options by category
+my %types;       # a hash of array  User to sort options by type
 
 GetOptions (
   "bindir=s"     => \$binDir,    # string
@@ -79,7 +82,8 @@ exit(3) if $err;
 ## 1) Collect the information from uncrustify
 ##
 my $ucVersion = getOption('--version');
-print "Running $ucVersion\n";
+$ucVersion = (split('-', $ucVersion))[1];
+print "Running Uncrustify version $ucVersion\n";
 
 open(PIPE, '-|', $ucBin, '--universalindent')
   || Fatal("Can't exec '$ucBin'\n$!");
@@ -177,10 +181,18 @@ for my $optKey (sort keys %options){
     }else{
         Warning("Unexpected value '$type' for field 'EditorType' in option '$optName'");
     }
-    printf($fh "  Category: %s\n", $Categories[$option->{Category}]||'unknow');
+    
+    my $catName = $Categories[$option->{Category}]||'unknow';
+    printf($fh "  Category: $catName\n");
     printf($fh "      Type: $type $expected\n");
     printf($fh "   Default: $default\n");
     delete $option->{Category};
+    
+    # update hashes used later to generated indexes
+    $types{$type} ||= [];
+    push(@{$types{$type}}, $optName);
+    $categories{$catName} ||= [];
+    push(@{$categories{$catName}}, $optName);
 
     # extract the description now (used later)
     my $desc = delete $option->{Description};
@@ -239,39 +251,38 @@ for my $optKey (sort keys %options){
 
 sub indexHeader {
     my $name = shift;
-    return join("\n", 
-      '<!doctype html>',
-      '<html>',
-      '<head>',
-      '  <meta charset="utf-8">',
-      '  <link rel="stylesheet" href="../static/uncrustify.css">',
-      "  <title>Uncrustify options - $name</title>",
-      '</head>',
-      "<body>\n"
-    );
+    return qq{
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../static/uncrustify.css">
+  <title>Uncrustify options by $name</title>
+</head>
+<body>
+<div class="left_scroll">
+  <a href="../index.html"><img src="../static/home-16.png"></a> | <a href="index_name.html">by name</a> | by <a href="index_category.html">category</a> | by <a href="index_type.html">type</a>
+  <p>Uncrustify version $ucVersion &nbsp; by <font color="red">$name</font></p>
+  <dl>
+}
 }
 
 sub indexFooter {
-    return join("\n", 
-      '<div class="footer">',
-      '  <br/><hr>',
-      '  <ul>',
-      '    <li>Report problems related to this documentation <a href="https://github.com/jeayne/jeayne.github.io/issues" target="_blank">here</a>.',
-      '    <li>This documentation project is <b>not</b> managed by the <a href="https://github.com/uncrustify" target="_blank">uncrustify</a> team.',
-      '  </ul>',
-      '</div>',
-      '</body>',
-      "</html>\n"
-    );
+    my $name = shift;    
+    return qq{  </dl>
+ <p align="center"><i>~ End of list by <font color="red">$name</font> ~</i></p>
+</div>
+<div class="right_display">
+  <iframe src="" title="uncrustify option" name="option" style="border:none;height:100%;width:100%" ></iframe>
+</div>
 }
+};
 
-## Index alphabetic
-$fname="$outputDir/index_alphabetic.html";
+## Index by name
+$fname="$outputDir/index_name.html";
 open($fh, '>', $fname)
-  || Fatal("Can't create index  $fname:\n$!");
-
-print($fh indexHeader('alphabetic'));
-print($fh qq{<div class="left_scroll">\n  <dl>\n});
+  || Fatal("Can't create index $fname:\n$!");
+print($fh indexHeader('name'));
 my $prefix = '';
 for my $optKey (sort keys %options){
     next if $optKey eq 'header';
@@ -279,25 +290,37 @@ for my $optKey (sort keys %options){
     (my $pfix = $optName) =~ s/^([^_]+).*$/$1/;
     if( $pfix ne $prefix ){
         $prefix = $pfix;
-        print($fh qq{    <dt style="margin-top:1em"><b>$prefix</b>:</dt>\n});
+        print($fh qq{    <dt><b>$prefix</b>:</dt>\n});
     }
-    print($fh qq{      <dd style="margin-left:1em"><a href="$optName.html" target="option">$optName</a></dd>\n});
+    print($fh qq{      <dd><a href="$optName.html" target="option">$optName</a></dd>\n});
 }
-
-print($fh join("\n", 
-  qq{  </dl>},
-  qq{  <p align="center"><i>~ End of list ~</i></p>},
-  qq{</div>},
-  qq{<div class="right_display">},
-  qq{  <iframe src="" title="uncrustify option" name="option" style="border:none;height:100%;width:100%" ></iframe>},
-  qq{</div>\n},
-));
-
-
+print($fh indexFooter('name'));
 close($fh);
 
-## Index by categorie
+## Index by category
+$fname="$outputDir/index_category.html";
+open($fh, '>', $fname)
+  || Fatal("Can't create index $fname:\n$!");
+print($fh indexHeader('category'));
+for my $catName (sort keys %categories){
+    print $fh qq{  <dt>$catName</dt>\n};
+    for my $optName (@{$categories{$catName}}){
+        print($fh qq{      <dd><a href="$optName.html" target="option">$optName</a></dd>\n});
+    }
+}
+print($fh indexFooter('category'));
 
 ## Index by type
+$fname="$outputDir/index_type.html";
+open($fh, '>', $fname)
+  || Fatal("Can't create index $fname:\n$!");
+print($fh indexHeader('type'));
+for my $typeName (sort keys %types){
+    print $fh qq{  <dt>$typeName</dt>\n};
+    for my $optName (@{$types{$typeName}}){
+        print($fh qq{      <dd><a href="$optName.html" target="option">$optName</a></dd>\n});
+    }
+}
+print($fh indexFooter('type'));
 
 __END__
