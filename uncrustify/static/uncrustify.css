@@ -10,7 +10,12 @@ body {
   overflow-y: scroll;
 }
 
+dt { margin-top:1em;  }
+
+dd { margin-left:1em; }
+
 .right_display {
   height: 100vh;
   overflow-y: auto;
 }
+
