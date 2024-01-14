@@ -74,6 +74,10 @@ if( $outputDir && ! -d $outputDir ){
 }
 exit(3) if $err;
 
+
+##
+## 1) Collect the information from uncrustify
+##
 my $ucVersion = getOption('--version');
 print "Running $ucVersion\n";
 
@@ -115,6 +119,11 @@ close($fh);
 $optCount -= 1;  # the [header] section is not an option.
 print "\n$optCount options + 'header' wrote in summary: $fname\n";
 
+##
+## 2) Generate a page for each options
+##    and collected information for indexes
+##
+
 ## Parse headers
 my @Categories = split('\|', $options{header}{categories}||'');
 
@@ -134,8 +143,9 @@ for my $optKey (sort keys %options){
                 '<head>',
                 '  <meta charset="utf-8">',
                 "  <title>$optName - uncrustify options</title>",
+                '  <link rel="stylesheet" href="../static/uncrustify.css">',
                 '</head>',
-                '<body style="color:white;background-color:black;">'
+                '<body>'
               ), "\n");
 
     ### name of the option as used in the config file
@@ -220,4 +230,74 @@ for my $optKey (sort keys %options){
     ### close the html page
     print($fh "</body>\n</html>\n");
     close($fh);
+   
 }
+
+##
+## 3) Generate indexes
+##
+
+sub indexHeader {
+    my $name = shift;
+    return join("\n", 
+      '<!doctype html>',
+      '<html>',
+      '<head>',
+      '  <meta charset="utf-8">',
+      '  <link rel="stylesheet" href="../static/uncrustify.css">',
+      "  <title>Uncrustify options - $name</title>",
+      '</head>',
+      "<body>\n"
+    );
+}
+
+sub indexFooter {
+    return join("\n", 
+      '<div class="footer">',
+      '  <br/><hr>',
+      '  <ul>',
+      '    <li>Report problems related to this documentation <a href="https://github.com/jeayne/jeayne.github.io/issues" target="_blank">here</a>.',
+      '    <li>This documentation project is <b>not</b> managed by the <a href="https://github.com/uncrustify" target="_blank">uncrustify</a> team.',
+      '  </ul>',
+      '</div>',
+      '</body>',
+      "</html>\n"
+    );
+}
+
+## Index alphabetic
+$fname="$outputDir/index_alphabetic.html";
+open($fh, '>', $fname)
+  || Fatal("Can't create index  $fname:\n$!");
+
+print($fh indexHeader('alphabetic'));
+print($fh qq{<div class="left_scroll">\n  <dl>\n});
+my $prefix = '';
+for my $optKey (sort keys %options){
+    next if $optKey eq 'header';
+    (my $optName = lc($optKey)) =~ s/ /_/g;
+    (my $pfix = $optName) =~ s/^([^_]+).*$/$1/;
+    if( $pfix ne $prefix ){
+        $prefix = $pfix;
+        print($fh qq{    <dt style="margin-top:1em"><b>$prefix</b>:</dt>\n});
+    }
+    print($fh qq{      <dd style="margin-left:1em"><a href="$optName.html" target="option">$optName</a></dd>\n});
+}
+
+print($fh join("\n", 
+  qq{  </dl>},
+  qq{  <p align="center"><i>~ End of list ~</i></p>},
+  qq{</div>},
+  qq{<div class="right_display">},
+  qq{  <iframe src="" title="uncrustify option" name="option" style="border:none;height:100%;width:100%" ></iframe>},
+  qq{</div>\n},
+));
+
+
+close($fh);
+
+## Index by categorie
+
+## Index by type
+
+__END__
