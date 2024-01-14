@@ -1,0 +1,16 @@
+body {
+  background-color: black;
+  color:white;
+}
+
+.left_scroll {
+  height: 100vh;
+  position:relative;
+  float:left;
+  overflow-y: scroll;
+}
+
+.right_display {
+  height: 100vh;
+  overflow-y: auto;
+}
