@@ -46,7 +46,8 @@ sub getOption {
   return $result;
 }
 
-# ==== NAME
+
+# ==== NAME the_option_name
 # bla bla ...
 # bla ...
 #
@@ -80,7 +81,7 @@ sub execUDS {
     my $comment = '';
     while($line = <$fh>){
         if( $line =~ /^={4,}\s*INPUT((:|\s)\s*(?<lang>\S+))?/ ){
-            $lang = uc($+{lang}) || "CPP";   # C, CPP, CS, D, JAVA, OC, OC+, PAWN, VALA.
+            $lang = uc($+{lang}||'') || "CPP";   # C, CPP, CS, D, JAVA, OC, OC+, PAWN, VALA.
             $lang = "CPP" if $lang eq 'C++';
             $lang = "CS"  if $lang eq 'C#';
             last;
@@ -123,7 +124,7 @@ sub execUDS {
     my %results;
     for my $optValue (@params){
         my $cmd = "$ucBin -c - --set $optName=$optValue -l $lang -f $tmpFile";
-        my $result; 
+        my $result;
         if( open(my $pipe, "$cmd |") ){
             while($line=<$pipe>){
                 $result .= $line;
@@ -138,8 +139,55 @@ sub execUDS {
         print "==== $optValue\n";
         print $results{$optValue};
     }
-    
-    ## TBD: generate the html file
+
+    ## In comment substitute `xx` by
+    ## <ins class="xx" alt="optName"></ins>
+    $comment =~ s!`(\w+)`!<ins class="$1" alt="$optName"></ins>!g;
+
+    ##  generate the <optName>.ex.html file
+    my $htmlFile = "$outputDir/$optName.ex.html";
+    open(my $html_fh, '>', $htmlFile)
+      || Fatal("Cannot create -ex.html file $htmlFile\n$!");
+
+    print $html_fh qq{
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Example for $optName</title>
+  <link rel="stylesheet" href="../static/uncrustify.css">
+  <link rel="stylesheet" href="../static/ins_tooltip.css">
+</head>
+<body>
+<pre>
+$comment
+</pre>
+<table><tr>
+};
+
+    # The header of each column
+    print $html_fh "  <th>not formated</th>\n";
+    for my $optValue (keys %results){
+        print $html_fh "  <th>$optValue</th>\n";
+    }
+
+    # First column: code not formated
+    print $html_fh qq{</tr><tr><td class="code">\n}, $input;
+
+    # the various formated versions
+    for my $optValue (keys %results){
+    print $html_fh qq{</td><td class="code">\n}, $results{$optValue};
+    }
+
+    # footer
+    print $html_fh qq{
+</td></tr>
+</table>
+</body>
+</html>
+    };
+
+    close($html_fh);
 }
 
 

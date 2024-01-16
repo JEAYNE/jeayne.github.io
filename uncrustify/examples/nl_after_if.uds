@@ -1,0 +1,32 @@
+==== NAME: nl_after_if
+bla bla bla ...
+bla.
+
+if(...){
+  ...
+} else {
+  ...
+}
+`nl`
+var = 0;
+
+==== INPUT
+
+int main(int argc, char** argv){
+   int n = 0;
+   if($arg>=1){
+       printf("Hello %s!\n", $argv[1]);
+       n=strlen($argv[1]);
+   }else{
+       puts("Hello world!");
+   }
+   return n;
+}
+
+==== WITH: add
+
+==== WITH: remove
+
+==== WITH: force
+
+==== WITH: not_defined

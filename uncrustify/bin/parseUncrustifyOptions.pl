@@ -136,9 +136,9 @@ for my $optKey (sort keys %options){
     next if $optKey eq 'header';
 
     (my $optName = lc($optKey) ) =~ s/ /_/g;
-    my $fname="$outputDir/$optName.html";
-    open(my $fh, '>', $fname)
-      || Fatal("Can't save option in $fname:\n$!");
+    my $optPath = "$outputDir/$optName.html";
+    open(my $fh, '>', $optPath)
+      || Fatal("Can't save option in $optPath:\n$!");
 
     ### html header
     print($fh join("\n",
@@ -221,11 +221,13 @@ for my $optKey (sort keys %options){
 
     ### Examples (if any)
     print($fh "<h1>Examples</h1>\n");
-    $fname = "../examples/$optName.html";
-    $fname = "../examples/404_no_example.html" unless -e $fname;
+    my $exFile = "$optName.ex.html";
+    my $exPath = "$outputDir/$exFile";
+    my $exHtmlPath = -e $exPath ? $exFile
+                                : "../static/404_no_example.html";
     print($fh join( ' ',
                     '<iframe',
-                      qq{src="$fname"},
+                      qq{src="$exHtmlPath"},
                       qq{title="Example for $optName"},
                       'name="example"',
                       'style="border:none;height:auto;width:100%"',
