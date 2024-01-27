@@ -1,51 +1,40 @@
 #!/usr/bin/perl
 
-use warnings;
+use v5.36;
 use strict;
 
 use Getopt::Long;
-use Data::Dumper;
+use FindBin qw($Bin $Script);
+use lib "$Bin/.";
 
-# global variables
-(my $myName = $0) =~ s!^.*?([^/\\]+)$!$1!;
-my $verbose = 0;
-my $binDir  = '.'; # where to find the uncrustify binary (default: current dir)
-my $ucBin   = '';
-my $inputDir;      # where to find the .uds (Uncrustify Documentation Script) files
-my $outputDir;     # where to generate the html files
+### Global variables used by this script and the module UDocTools
+our $verbose = 0;  # set by user on command line 
+our $ucBin;        # set by user on command line (default is $Bin)
 
-sub Debug {
-    $verbose && print "\e[94m", shift, "\e[0m\n";
-}
+use UDocTools qw(getOption SayError Fatal);
 
-sub Info {
-    print "\e[92m", shift, "\e[0m\n";
-}
+### Global variables used by this script
+$|=1;
+my $binDir    =  $Bin;                 # where to find the uncrustify binary
+my $inputDir  = "$Bin/../uds/default"; # where to find the default .uds (Uncrustify Documentation Script) files
+my $outputDir = "$Bin/../examples";    # where to generate the html files
+my $forceHtml = 0;                     # force html generation regardless of its date
+my $inputFile;                         # generate the html using this input .uds
 
-sub Warning {
-    print STDERR "$myName\e[93m WARNING: ", shift, "\e[0m\n";
-}
+$inputFile = "$Bin/../uds/indent_braces.uds";  #### DEBUG !!!
 
-sub Error {
-    print STDERR "$myName\e[91m ERROR: ", shift, "\e[0m\n";
-}
+#
+# The expected file layout is
+#    base/
+#     +->uds/
+#        +-> *.uds             <-- inputDir/..  (tuned uds hidding version in inputDir)
+#        +->default
+#            +->*.uds          <-- inputDir     (auto generated uds)
+#
 
-sub Fatal {
-    print STDERR "$myName\e[91m ERROR: ", shift, "\e[0m\n";
-    die "\n";
-}
 
-# routine used to check the path, and get the version
-sub getOption {
-  my $option = shift || '';
-  open(PIPE, '-|', $ucBin, $option)
-    || Fatal("Can't exec '$ucBin'\n$!");
-  my $result=<PIPE>;
-  close(PIPE);
-  chomp($result);
-  return $result;
-}
-
+# Nom du script (sans .pl) utilisé dans les messages d'erreur
+$Script =~ s/^(.+)\.pl$/$1/i;
 
 # ==== NAME the_option_name
 # bla bla ...
@@ -66,14 +55,14 @@ sub execUDS {
     (my $optName = $path) =~ s!^.*?([^/]+)\.uds$!$1!;
     print "Option $optName from $path\n";
 
-    open(my $fh, $path)
+    open(my $fh, '<', $path)
       || Fatal("Cannot open file '$path'\n$!");
 
     my $line;
     while($line = <$fh>){
         next unless $line =~ /^={4,}\s+(NAME)(:|\s)\s*(?<optName>\S+)/;
         last if $+{optName} eq $optName;
-        Error("Name '$+{optName}' doesn't match with '$optName' in file name: $path");
+        SayError("Name '$+{optName}' doesn't match with '$optName' in file name: $path");
         return;
     }
 
@@ -95,7 +84,7 @@ sub execUDS {
         $input .= $line;
     }
     unless( $input ){
-        Error("No input defined in $path");
+        SayError("No input defined in $path");
         return;
     }
     my $tmpFile = "$outputDir/tmpinput.tmp";
@@ -110,7 +99,7 @@ sub execUDS {
     } while($line = <$fh>);
 
     unless( @params ){
-        Error("No value defined for option $optName in $path");
+        SayError("No value defined for option $optName in $path");
         return;
     }
 
@@ -132,7 +121,7 @@ sub execUDS {
             close($pipe);
             $results{$optValue} = $result || "ERROR executing pipe '$cmd | ...'";
         }else{
-            Error("Cannot execute pipe '$cmd | ...'");
+            SayError("Cannot execute pipe '$cmd | ...'");
         }
     }
     for my $optValue (sort keys %results){
@@ -194,50 +183,56 @@ $comment
 ##
 ## main
 ##
-$|=1;
 
 GetOptions (
   "bindir=s"     => \$binDir,    # string
+  "force"        => \$forceHtml, # flag
   "inputdir=s"   => \$inputDir,  # string
+  "inputfile=s"  => \$inputFile, # string
   "outputdir=s"  => \$outputDir, # string
   "verbose"      => \$verbose    # flag
 ) or Fatal("Invalid command line arguments");
 
-$binDir = $1 if $binDir =~ m!^(.+)/+$!;
-$ucBin  = "${binDir}/uncrustify.exe";
+$binDir .= '/'  if $binDir && $binDir !~ m(/$);
+$ucBin  = "${binDir}uncrustify.exe";
 
 my $err=0;
-if( $binDir  && ! -d $binDir ){
-    Error("Path '$binDir' doesn't exist.");
-    $err++;
-}elsif( ! -e $ucBin ){
-    Error("File '$ucBin' doesn't exist.");
-    $err++;
-}
-
-if( $inputDir ){
-    $inputDir = $1 if $inputDir =~ m!^(.+)/+$!;
-    if( ! -d $inputDir ){
-        Error("Path '$inputDir' doesn't exist.");
+if( $binDir ){
+    if( ! -d $binDir ){
+        SayError("Path '$binDir' doesn't exist.");
+        $err++;
+    }elsif( ! -e $ucBin ){
+        SayError("File '$ucBin' doesn't exist.");
         $err++;
     }
 }else{
-    Error("--inputDir not set.");
-    $err++;
+    SayError("Path --bindir is not defined.");
+    $err++;    
 }
 
 if( $outputDir ){
-    $outputDir = $1 if $outputDir =~ m!^(.+)/+$!;
     if( ! -d $outputDir ){
-        Error("Path '$outputDir' doesn't exist.");
+        SayError("Path '$outputDir' doesn't exist.");
         $err++;
     }
 }else{
-    Error("--outputDir not set.");
+    SayError("Path --outputDir is not defined.");
     $err++;
 }
 
 exit(3) if $err;
+
+my $ucVersion = getOption('--version');
+$ucVersion = (split('-', $ucVersion))[1];
+say "Using Uncrustify version $ucVersion";
+
+if( $inputFile ){
+    unless( -f $inputFile ){
+        SayError("The --inputfile '$inputFile' doesn't exist");
+    }
+    execUDS($inputFile);
+    exit;
+}
 
 # read each uds file
 # ignore the file if the output/html is younger than input/uds
@@ -246,10 +241,20 @@ opendir(my $dh, $inputDir)
 
 while( my $file = readdir($dh) ){
    next if $file =~ /^\./;
-   my $path = "$inputDir/$file";
-   next unless -f $path;
-   next unless $path =~ /\.uds$/;
-   execUDS($path);
+   my $udsPath = "$inputDir/$file";
+   next unless -f $udsPath;
+   next unless $udsPath =~ /\.uds$/;
+   # If this file also exist in the parent directory use it.
+   my $udsParentPath = "$inputDir/../$file";
+   $udsPath = $udsParentPath if -f $udsParentPath;
+   # Do nothing if corresponding html file is younger
+   my $htmlPath = "$outputDir/$file.ex.html";
+   if( $forceHtml || ((stat($htmlPath))[9] < (stat($udsPath))[9]) ){
+       execUDS($udsPath);
+   }else{
+       say "$file.exe.html is already uptodate";
+   }
+
 }
 
 close($dh);

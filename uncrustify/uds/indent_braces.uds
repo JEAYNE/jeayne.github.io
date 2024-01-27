@@ -1,0 +1,14 @@
+==== NAME: indent_braces
+==== INPUT
+int main(int argc, char** argv){
+  int n = 0;
+  if(arg>=1){
+    printf("Hello %s!\n", argv[1]);
+    n=strlen(argv[1]);
+  }else{
+    puts("Hello world!");
+  }
+  return n;
+}
+==== WITH false
+==== WITH true

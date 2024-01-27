@@ -1,55 +1,31 @@
 #!/usr/bin/perl
 
-use warnings;
+use v5.36;
 use strict;
 
-use Getopt::Long; # https://perldoc.perl.org/Getopt::Long
-use Data::Dumper; # https://metacpan.org/pod/Data::Dumper
+use Getopt::Long;
+use FindBin qw($Bin $Script);
+use lib "$Bin/.";
 
-# global variables used by subroutines
-(my $myName = $0) =~ s!^.*?([^/\\]+)$!$1!;
-my $ucBin   = '';
-my $verbose = 0;
+### Global variables used by this script and the module UDocTools
+our $verbose = 0;  # set by user on command line 
+our $ucBin;        # set by user on command line (default is $Bin)
 
-sub Debug {
-    $verbose && print "\e[94m", shift, "\e[0m\n";
-}
+use UDocTools qw(getOption SayError Fatal dumpit);
 
-sub Info {
-    print "\e[92m", shift, "\e[0m\n";
-}
-
-sub Warning {
-    print STDERR "$myName\e[93m WARNING: ", shift, "\e[0m\n";
-}
-
-sub Error {
-    print STDERR "$myName\e[91m ERROR: ", shift, "\e[0m\n";
-}
-
-sub Fatal {
-    print STDERR "$myName\e[91m ERROR: ", shift, "\e[0m\n";
-    die "\n";
-}
-
-# routine used to check the path, and get the version
-sub getOption {
-  my $option = shift || '';
-  open(PIPE, '-|', $ucBin, $option)
-    || Fatal("Can't exec '$ucBin'\n$!");
-  my $result=<PIPE>;
-  close(PIPE);
-  chomp($result);
-  return $result;
-}
+# Nom du script (sans .pl) utilisé dans les messages d'erreur
+$Script =~ s/^(.+)\.pl$/$1/i;
 
 ##
 ## main
 ##
 
 $|=1;
-my $binDir  = '';
-my $outputDir;
+my $binDir    =  $Bin;                 # where to find the uncrustify binary
+my $outputDir = "$Bin/../options";     # where to generate the html files
+my $forceHtml = 0;                     # force html generation regardless of its date
+my $inputFile;                         # generate the html using this input .uds
+
 my %options;     # a hash of hash   Used to collect info and then sort options by name
 my %categories;  # a hash of array  Used to sort options by category
 my %types;       # a hash of array  User to sort options by type
@@ -64,19 +40,30 @@ $binDir .= '/'  if $binDir && $binDir !~ m(/$);
 $ucBin   = "${binDir}uncrustify.exe";
 
 my $err=0;
-if( $binDir  && ! -d $binDir ){
-    Error("Path '$binDir' doesn't exist.");
-    $err++;
-}elsif( ! -e $ucBin ){
-    Error("File '$ucBin' doesn't exist.");
-    $err++;
-}
-if( $outputDir && ! -d $outputDir ){
-    Error("Path '$outputDir' doesn't exist");
-    $err++;
-}
-exit(3) if $err;
+if( $binDir ){
+    if( ! -d $binDir ){
+        Error("Path '$binDir' doesn't exist.");
+        $err++;
+    }elsif( ! -e $ucBin ){
+        Error("File '$ucBin' doesn't exist.");
+        $err++;
+    }
+}else{
+    Error("Path --bindir is not defined.");
+    $err++;    
+}    
 
+if( $outputDir ){
+    if( ! -d $outputDir ){
+        Error("Path '$outputDir' doesn't exist.");
+        $err++;
+    }
+}else{
+    Error("Path --outputDir is not defined.");
+    $err++;
+}
+
+exit(3) if $err;
 
 ##
 ## 1) Collect the information from uncrustify
@@ -114,11 +101,7 @@ close(PIPE);
 my $fname = "$outputDir/Summary.txt";
 open(my $fh, '>', $fname)
   || Fatal("Can't create summary $fname:\n$!");
-
-$Data::Dumper::Indent   = 1;
-$Data::Dumper::Sortkeys = 1;
-print $fh Dumper(\%options);
-
+print $fh dumpit(\%options);
 close($fh);
 $optCount -= 1;  # the [header] section is not an option.
 print "\n$optCount options + 'header' wrote in summary: $fname\n";
