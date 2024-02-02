@@ -11,7 +11,7 @@ use lib "$Bin/.";
 our $verbose = 0;  # set by user on command line 
 our $ucBin;        # set by user on command line (default is $Bin)
 
-use UDocTools qw(getOption SayError Fatal dumpit);
+use UDocTools qw(loadOptionDescriptions getOption SayError Fatal dumpit);
 
 # Nom du script (sans .pl) utilisé dans les messages d'erreur
 $Script =~ s/^(.+)\.pl$/$1/i;
@@ -26,7 +26,6 @@ my $outputDir = "$Bin/../options";     # where to generate the html files
 my $forceHtml = 0;                     # force html generation regardless of its date
 my $inputFile;                         # generate the html using this input .uds
 
-my %options;     # a hash of hash   Used to collect info and then sort options by name
 my %categories;  # a hash of array  Used to sort options by category
 my %types;       # a hash of array  User to sort options by type
 
@@ -68,42 +67,19 @@ exit(3) if $err;
 ##
 ## 1) Collect the information from uncrustify
 ##
+
 my $ucVersion = getOption('--version');
 $ucVersion = (split('-', $ucVersion))[1];
-print "Running Uncrustify version $ucVersion\n";
+say "Running Uncrustify version $ucVersion";
 
-open(PIPE, '-|', $ucBin, '--universalindent')
-  || Fatal("Can't exec '$ucBin'\n$!");
-
-my $optName;
-my $optCount = 0;
-while(my $line = <PIPE>){
-    chomp $line;
-    # print "$line\n";
-    next if $line =~ /^\s*(#.*)?$/;
-    if( $line =~ /^\s*\[([^\]]+)\]/ ){
-        # got "[option name]"
-        $optName = $1;
-        $options{$optName}={};
-        $optCount++;
-        printf("%4d: %s\n", $optCount, $optName);
-    }elsif( $line =~ /^\s*(\w*)\s*=\s*(.*)$/ ){
-        # got "name=value"
-        $options{$optName}{$1}=$2;
-        # printf("      %s=%s\n", $1, $options{$optName}{$1});
-    }else{
-        print "Ignoring: '$line'\n";
-    }
-}
-
-close(PIPE);
-
+my $options = loadOptionDescriptions();
+    
 my $fname = "$outputDir/Summary.txt";
 open(my $fh, '>', $fname)
   || Fatal("Can't create summary $fname:\n$!");
-print $fh dumpit(\%options);
+print $fh dumpit($options);
 close($fh);
-$optCount -= 1;  # the [header] section is not an option.
+my $optCount = (keys %{$options}) - 1;  # the [header] section is not an option.
 print "\n$optCount options + 'header' wrote in summary: $fname\n";
 
 ##
@@ -112,10 +88,10 @@ print "\n$optCount options + 'header' wrote in summary: $fname\n";
 ##
 
 ## Parse headers
-my @Categories = split('\|', $options{header}{categories}||'');
+my @Categories = split('\|', $options->{header}{categories}||'');
 
 ## Save
-for my $optKey (sort keys %options){
+for my $optKey (sort keys %{$options}){
     next if $optKey eq 'header';
 
     (my $optName = lc($optKey) ) =~ s/ /_/g;
@@ -138,7 +114,7 @@ for my $optKey (sort keys %options){
     ### name of the option as used in the config file
     printf($fh qq{<h1><pre style="color:yellow">%s</pre></h1>\n}, $optName);
 
-    my $option = $options{$optKey};
+    my $option = $options->{$optKey};
     delete $option->{CallName};
 
     ### properties
@@ -150,8 +126,10 @@ for my $optKey (sort keys %options){
         $expected="[false, true]";
         delete $option->{TrueFalse};
     }elsif( $type eq 'numeric' ){
+        # NOTE: there are 10 options with not value for MaxVal anf MinVal
         my $max = delete $option->{MaxVal};
         my $min = delete $option->{MinVal};
+        $min = $default if $min eq '';
         $expected="[$min .. $max]";
     }elsif( $type eq 'string' ){
         $expected="";
@@ -181,7 +159,7 @@ for my $optKey (sort keys %options){
     my $desc = delete $option->{Description};
 
     # All options have Enabled=false, excepted 'indent_with_tabs'
-    # What is the goal of this propreties ?
+    # What is the goal of this properties ?
     delete $option->{Enabled};
 
     # print unmanaged properties (empty list expected)
@@ -269,7 +247,7 @@ open($fh, '>', $fname)
   || Fatal("Can't create index $fname:\n$!");
 print($fh indexHeader('name'));
 my $prefix = '';
-for my $optKey (sort keys %options){
+for my $optKey (sort keys %{$options}){
     next if $optKey eq 'header';
     (my $optName = lc($optKey)) =~ s/ /_/g;
     (my $pfix = $optName) =~ s/^([^_]+).*$/$1/;

@@ -10,7 +10,7 @@ if(...){
 `nl`
 var = 0;
 
-==== INPUT
+==== CODE
 
 int main(int argc, char** argv){
    int n = 0;
@@ -23,10 +23,10 @@ int main(int argc, char** argv){
    return n;
 }
 
-==== WITH: add
+==== SET add
 
-==== WITH: remove
+==== SET remove
 
-==== WITH: force
+==== SET force
 
-==== WITH: not_defined
+==== SET not_defined

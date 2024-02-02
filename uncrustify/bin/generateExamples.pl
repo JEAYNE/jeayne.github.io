@@ -8,10 +8,10 @@ use FindBin qw($Bin $Script);
 use lib "$Bin/.";
 
 ### Global variables used by this script and the module UDocTools
-our $verbose = 0;  # set by user on command line 
+our $verbose = 0;  # set by user on command line
 our $ucBin;        # set by user on command line (default is $Bin)
 
-use UDocTools qw(getOption SayError Fatal);
+use UDocTools qw(getOption SayError Fatal dumpit);
 
 ### Global variables used by this script
 $|=1;
@@ -37,20 +37,32 @@ $inputFile = "$Bin/../uds/indent_braces.uds";  #### DEBUG !!!
 $Script =~ s/^(.+)\.pl$/$1/i;
 
 # ==== NAME the_option_name
-# bla bla ...
-# bla ...
 #
 # ==== INPUT: CPP
 #
 # void main(int argc, char** argv){
 #   putc("Hello !");
 # }
+# ==== SET: the_option_name=ignore
 #
-# ==== WITH: ignore
+# ==== SET: the_option_name=force
 #
-# ==== WITH: force
+# ==== TRACK: space
 
-sub execUDS {
+sub getBlock {
+    my $FH        = shift;
+    my $refResult = shift;
+    my $str = '';
+    my $line;
+    while( $line = <$FH> ){
+        last if $line =~ /^={4,}/;
+        $str .= $line;
+    }
+    ${$refResult} = ($str =~ /^\s*$/) ? '' : $str;
+    return $line;
+}
+                
+sub loadUDS {
     my $path = shift;
     (my $optName = $path) =~ s!^.*?([^/]+)\.uds$!$1!;
     print "Option $optName from $path\n";
@@ -58,80 +70,123 @@ sub execUDS {
     open(my $fh, '<', $path)
       || Fatal("Cannot open file '$path'\n$!");
 
+    my %uds = (
+      path    => $path,
+    );
+
     my $line;
-    while($line = <$fh>){
-        next unless $line =~ /^={4,}\s+(NAME)(:|\s)\s*(?<optName>\S+)/;
-        last if $+{optName} eq $optName;
-        SayError("Name '$+{optName}' doesn't match with '$optName' in file name: $path");
-        return;
-    }
-
-    my $lang;
-    my $comment = '';
-    while($line = <$fh>){
-        if( $line =~ /^={4,}\s*INPUT((:|\s)\s*(?<lang>\S+))?/ ){
-            $lang = uc($+{lang}||'') || "CPP";   # C, CPP, CS, D, JAVA, OC, OC+, PAWN, VALA.
-            $lang = "CPP" if $lang eq 'C++';
-            $lang = "CS"  if $lang eq 'C#';
-            last;
+    while( $line = <$fh> ){
+        chomp $line;
+        next if $line =~ /^\s*(#.*)?$/;
+        if( $line =~ /^={4,}\s*([A-Z]+)\s*(:\s*)?(.*?)(\s*)$/ ){
+            my $action=$1;
+            my $param=$3;
+            if( $action eq 'INFO' ){
+                ; # nothing to do.
+            }elsif( $action eq 'NAME'  ){
+                # This is a double check to be sure that the name of the file and its contain are inline.
+                # Example: '==== NAME: align_func_params'
+                if( $param ne $optName ){
+                    SayError("Name '$param' doesn't match with '$optName' in file name: $path");
+                    return;
+                }
+                $uds{name}=$optName;
+                # optional block description
+                $line = getBlock($fh, \$uds{desc});
+                $line ? redo : last;
+            }elsif( $action eq 'CODE' ){
+                # Example: '==== CODE: C++'
+                my $lang = uc($param||'CPP');
+                $lang = "CPP" if $lang eq 'C++';
+                $lang = "CS"  if $lang eq 'C#';
+                if( $lang !~ /^(C|CPP|D|CS|JAVA|PAWN|OC|OC+|VALA)$/ ){
+                    SayError("'$param' is un invalid language in file '$path'");
+                    return;
+                }
+                $uds{lang} = $lang;
+                # mandatory block of code
+                $line = getBlock($fh, \$uds{code});
+                unless( $uds{code} ){
+                    SayError("'CODE' is empty in file '$path'");
+                    return;
+                }
+                $line ? redo : last;
+            }elsif( $action eq 'SET'  ){
+                # Example: '==== SET align_func_params=false align_keep_tabs=false'
+                # Check that $param is a list of 'key=value'
+                for my $kv ( split(/\s+/, $param) ){
+                    next if $kv =~ /^\w+=\w+$/;
+                    SayError("Invalid SET value '$kv' in file '$path'");
+                    return;
+                }
+                push @{$uds{set}}, $param;
+            }elsif( $action eq 'TRACK' ){
+                if( $param !~ /^(nl|space|start)$/ ){
+                    SayError("'$param' is an invalid tracking mode in file '$path'");
+                    return;
+                }
+                push @{$uds{tracking}}, $param;
+            }else{
+                SayError("'==== $action' is not a valid action in file '$path'");
+                return;
+            }
+        }else{
+            SayError("Invalid line: '$line' in file '$path'");
+            return;
         }
-        $comment .= $line;
     }
-
-    my $input;
-    while($line = <$fh>){
-        last if $line =~ /^={4,}\s*WITH/;
-        $input .= $line;
-    }
-    unless( $input ){
-        SayError("No input defined in $path");
-        return;
-    }
-    my $tmpFile = "$outputDir/tmpinput.tmp";
-    open(my $tmp_fh, ">", $tmpFile)
-      || Fatal("Cannot create tmp file $tmpFile\n$!");
-    print $tmp_fh $input;
-    close($tmp_fh);
-
-    my @params;
-    do {
-        push(@params, $+{optVal}) if $line =~ /^={4,}\s*WITH(:|\s)\s*(?<optVal>\w+)/;
-    } while($line = <$fh>);
-
-    unless( @params ){
-        SayError("No value defined for option $optName in $path");
-        return;
-    }
-
     close($fh);
 
-    print "--- Comment ---\n";
-    print $comment;
-    print "--- Input ($lang) ---\n";
-    print $input;
-    print "---- Run ----\n";
+    my $errMsg = '';
+    $errMsg .= "  'NAME' is missing\n" unless $uds{name};
+    $errMsg .= "  'CODE' is missing\n" unless $uds{code};
+    $errMsg .= "  'SET'  is missing\n" unless $uds{set};
+    if( $errMsg ){
+        SayError( "Missing section in '$path':\n$errMsg\n");
+        return;
+    }
+
+    return \%uds;
+}
+
+sub execUDS {
+    my $path = shift;
+    my $uds = loadUDS($path);  # return ref to a hash, undef if error.
+    return unless $uds;
+
+    my $tmpFile = ($ENV{TMP} || $ENV{TEMP}) . "/uncrustify.tmp";
+    open(my $tmp_fh, ">", $tmpFile)
+      || Fatal("Cannot create tmp file $tmpFile\n$!");
+    print $tmp_fh $uds->{code};
+    close($tmp_fh);
+
     my %results;
-    for my $optValue (@params){
-        my $cmd = "$ucBin -c - --set $optName=$optValue -l $lang -f $tmpFile";
+    for my $set (@{$uds->{set}}){
+        # build the list --set opt1Name=opt1Value --set opt2Name=opt2Value
+        my $setList = join(' ', map("--set $_", split(/\s+/, $set)));
+        my $cmd = "$ucBin -c - $setList -l $uds->{lang} -f $tmpFile";
         my $result;
         if( open(my $pipe, "$cmd |") ){
+            my $line;
             while($line=<$pipe>){
                 $result .= $line;
             }
             close($pipe);
-            $results{$optValue} = $result || "ERROR executing pipe '$cmd | ...'";
+            $results{$set} = $result || "ERROR executing pipe '$cmd | ...'";
         }else{
             SayError("Cannot execute pipe '$cmd | ...'");
         }
     }
-    for my $optValue (sort keys %results){
-        print "==== $optValue\n";
-        print $results{$optValue};
+    for my $set (sort keys %results){
+        print "==== $set\n";
+        print $results{$set};
     }
 
-    ## In comment substitute `xx` by
+    my $optName = $uds->{name};
+
+    ## In description substitute `xx` by
     ## <ins class="xx" alt="optName"></ins>
-    $comment =~ s!`(\w+)`!<ins class="$1" alt="$optName"></ins>!g;
+    $uds->{desc} =~ s!`(\w+)`!<ins class="$1" alt="$optName"></ins>!g;
 
     ##  generate the <optName>.ex.html file
     my $htmlFile = "$outputDir/$optName.ex.html";
@@ -149,7 +204,7 @@ sub execUDS {
 </head>
 <body>
 <pre>
-$comment
+$uds->{desc}
 </pre>
 <table><tr>
 };
@@ -161,7 +216,7 @@ $comment
     }
 
     # First column: code not formated
-    print $html_fh qq{</tr><tr><td class="code">\n}, $input;
+    print $html_fh qq{</tr><tr><td class="code">\n}, $uds->{code};
 
     # the various formated versions
     for my $optValue (keys %results){
@@ -207,7 +262,7 @@ if( $binDir ){
     }
 }else{
     SayError("Path --bindir is not defined.");
-    $err++;    
+    $err++;
 }
 
 if( $outputDir ){

@@ -1,7 +1,7 @@
 @echo off
 title Runing parseUncrustifyOptions.pl
 set BINDIR="%~dp0"
-cd %BINDIR%
+cd /D %BINDIR%
 cd
 
 @echo:
