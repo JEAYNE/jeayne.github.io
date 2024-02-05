@@ -70,7 +70,6 @@ exit(3) if $err;
 
 my $ucVersion = getOption('--version');
 $ucVersion = (split('-', $ucVersion))[1];
-say "Running Uncrustify version $ucVersion";
 
 my $options = loadOptionDescriptions();
     
@@ -224,7 +223,7 @@ sub indexHeader {
 </head>
 <body>
 <div class="left_scroll">
-  <a href="../index.html"><img src="../static/home-16.png"></a> | <a href="index_name.html">by name</a> | by <a href="index_category.html">category</a> | by <a href="index_type.html">type</a>
+  <a href="../index.html"><img src="../static/home-16.png"></a> | <a href="index_name.html">by name</a> | by <a href="index_category.html">category</a> | by <a href="index_type.html">type</a> | by <a href="index_keyword.html">keyword</a>
   <p>Uncrustify version $ucVersion &nbsp; by <font color="red">$name</font></p>
   <dl>
 }
@@ -242,12 +241,15 @@ sub indexFooter {
 };
 
 ## Index by name
+my %keywords;
+my @allOptionsSorted = sort keys %{$options}; # To speed up
+
 $fname="$outputDir/index_name.html";
 open($fh, '>', $fname)
   || Fatal("Can't create index $fname:\n$!");
 print($fh indexHeader('name'));
 my $prefix = '';
-for my $optKey (sort keys %{$options}){
+for my $optKey (@allOptionsSorted){
     next if $optKey eq 'header';
     (my $optName = lc($optKey)) =~ s/ /_/g;
     (my $pfix = $optName) =~ s/^([^_]+).*$/$1/;
@@ -256,6 +258,8 @@ for my $optKey (sort keys %{$options}){
         print($fh qq{    <dt><b>$prefix</b>:</dt>\n});
     }
     print($fh qq{      <dd><a href="$optName.html" target="option">$optName</a></dd>\n});
+    # update the keyword list
+    $keywords{$_}++ for (split '_', $optName);
 }
 print($fh indexFooter('name'));
 close($fh);
@@ -285,5 +289,24 @@ for my $typeName (sort keys %types){
     }
 }
 print($fh indexFooter('type'));
+
+## Index by keyword
+# remove some words that are not real keywords
+delete $keywords{$_} for (qw(0 1 2 as at of only the to));
+
+$fname="$outputDir/index_keyword.html";
+open($fh, '>', $fname)
+  || Fatal("Can't create index $fname:\n$!");
+print($fh indexHeader('keyword'));
+for my $kw (sort keys %keywords){
+    print $fh qq{  <dt>$kw</dt>\n};
+    for my $optKey (@allOptionsSorted){
+        (my $optName = lc($optKey)) =~ s/ /_/g;
+        # next if index($optName, $kw) < 0;
+        next unless $optName =~ /(\b|_)$kw(_|\b)/;
+        print($fh qq{      <dd><a href="$optName.html" target="option">$optName</a></dd>\n});
+    }
+}
+print($fh indexFooter('keyword'));
 
 __END__
