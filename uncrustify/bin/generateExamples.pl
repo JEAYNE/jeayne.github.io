@@ -114,12 +114,16 @@ sub loadUDS {
             }elsif( $action eq 'SET'  ){
                 # Example: '==== SET align_func_params=false align_keep_tabs=false'
                 # Check that $param is a list of 'key=value'
-                for my $kv ( split(/\s+/, $param) ){
-                    next if $kv =~ /^\w+=\w+$/;
-                    SayError("Invalid SET value '$kv' in file '$path'");
+                if( $param =~ /^\s*$/ ){
+                    SayError("Empty SET in file '$path'");
                     return;
                 }
-                push @{$uds{set}}, $param;
+                for my $kv ( split(/\s+/, $param) ){
+                    next if $kv =~ /^\w+=\w+$/;
+                    SayError("Invalid SET '$kv' in file '$path'");
+                    return;
+                }
+                push(@{$uds{set}}, $param);
             }elsif( $action eq 'TRACK' ){
                 if( $param !~ /^(nl|space|start)$/ ){
                     SayError("'$param' is an invalid tracking mode in file '$path'");
@@ -138,13 +142,16 @@ sub loadUDS {
     close($fh);
 
     my $errMsg = '';
-    $errMsg .= "  'NAME' is missing\n" unless $uds{name};
-    $errMsg .= "  'CODE' is missing\n" unless $uds{code};
-    $errMsg .= "  'SET'  is missing\n" unless $uds{set};
+    $errMsg .= "  '==== NAME' is missing\n" unless $uds{name};
+    $errMsg .= "  '==== CODE' is missing\n" unless $uds{code};
+    $errMsg .= "  '==== SET'  is missing\n" unless $uds{set};
     if( $errMsg ){
         SayError( "Missing section in '$path':\n$errMsg\n");
         return;
     }
+    
+    # cleanup
+    $uds{code} =~ s/\s+$/\n/;
 
     return \%uds;
 }
@@ -177,10 +184,6 @@ sub execUDS {
             SayError("Cannot execute pipe '$cmd | ...'");
         }
     }
-    for my $set (sort keys %results){
-        print "==== $set\n";
-        print $results{$set};
-    }
 
     my $optName = $uds->{name};
 
@@ -188,7 +191,21 @@ sub execUDS {
     ## <ins class="xx" alt="optName"></ins>
     $uds->{desc} =~ s!`(\w+)`!<ins class="$1" alt="$optName"></ins>!g;
 
-    ##  generate the <optName>.ex.html file
+    # Generate the table 
+    #   | raw code | option_name=value1 | option_name=value2 | 
+    #   +----------+--------------------+--------------------+
+    #   |  code    | result             | result             |
+    #   +----------+--------------------+--------------------+
+
+    my $tblHeader = qq(  <th>raw code</th>\n);
+    my $tblBody   = qq(<td class="code">$uds->{code}</td>\n);
+    for my $set (sort keys %results){
+        $set =~ s!\s+!<br/>!g;
+        $tblHeader .= qq(  <th>$set</th>\n);
+        $tblBody   .= qq(<td class="code">$results{$set}</td>\n);
+    }
+
+    ##  generate the html file <optName>.ex.html
     my $htmlFile = "$outputDir/$optName.ex.html";
     open(my $html_fh, '>', $htmlFile)
       || Fatal("Cannot create -ex.html file $htmlFile\n$!");
@@ -207,26 +224,10 @@ sub execUDS {
 $uds->{desc}
 </pre>
 <table><tr>
-};
-
-    # The header of each column
-    print $html_fh "  <th>not formated</th>\n";
-    for my $optValue (keys %results){
-        print $html_fh "  <th>$optValue</th>\n";
-    }
-
-    # First column: code not formated
-    print $html_fh qq{</tr><tr><td class="code">\n}, $uds->{code};
-
-    # the various formated versions
-    for my $optValue (keys %results){
-    print $html_fh qq{</td><td class="code">\n}, $results{$optValue};
-    }
-
-    # footer
-    print $html_fh qq{
-</td></tr>
-</table>
+$tblHeader
+</tr><tr>
+$tblBody
+</tr></table>
 </body>
 </html>
     };

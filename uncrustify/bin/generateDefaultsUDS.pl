@@ -58,7 +58,6 @@ exit(3) if $err;
 
 my $ucVersion = getOption('--version');
 $ucVersion = (split('-', $ucVersion))[1];
-say "Running Uncrustify version $ucVersion";
 
 # a ref to a hash of hash   Used to collect info and then sort options by name
 my $options = loadOptionDescriptions();
@@ -111,8 +110,8 @@ sub generateUdsForBoolean {
       , '  }'
       , '  return n;'
       , '}'
-      , '==== SET $opt->{optName}=false'
-      , '==== SET $opt->{optName}=true'
+      , "==== SET $opt->{optName}=false"
+      , "==== SET $opt->{optName}=true"
     ) ;
 }
 

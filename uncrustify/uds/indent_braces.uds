@@ -17,5 +17,4 @@ int main(int argc, char** argv){
 }
 
 ==== SET indent_braces=false
- 
 ==== SET indent_braces=true

@@ -23,10 +23,7 @@ int main(int argc, char** argv){
    return n;
 }
 
-==== SET add
-
-==== SET remove
-
-==== SET force
-
-==== SET not_defined
+==== SET nl_after_if=add
+==== SET nl_after_if=remove
+==== SET nl_after_if=force
+==== SET nl_after_ifnot_defined
