@@ -95,7 +95,7 @@ sub loadOptionDescriptions {
       || Fatal("Can't exec '$::ucBin'\n$!");
 
     my %options;
-    my $optName;
+    my $optKey;
     my $optCount = 0;
     while(my $line = <PIPE>){
         chomp $line;
@@ -103,14 +103,17 @@ sub loadOptionDescriptions {
         next if $line =~ /^\s*(#.*)?$/;
         if( $line =~ /^\s*\[([^\]]+)\]/ ){
             # got "[option name]"
-            $optName = $1;
-            $options{$optName}={};
+            my $optName = $1;
+            ($optKey = lc($optName)) =~ s/ /_/g;
+            $options{$optKey}={
+                optName => $optName,    # Align Func Params Gap
+                optKey  => $optKey,     # align_func_params_gap
+            };
             $optCount++;
             printf("%4d: %s\n", $optCount, $optName);
         }elsif( $line =~ /^\s*(\w*)\s*=\s*(.*)$/ ){
             # got "name=value"
-            $options{$optName}{$1}=$2;
-            # printf("      %s=%s\n", $1, $options{$optName}{$1});
+            $options{$optKey}{$1}=$2;
         }else{
             print "Ignoring: '$line'\n";
         }

@@ -4,10 +4,10 @@ body {
 }
 
 .left_scroll {
-  height: 100vh;
+  height: 98vh;
   position:relative;
   float:left;
-  overflow-y: scroll;
+  overflow-y: auto;
 }
 
 dt { margin-top:1em;  }
@@ -15,7 +15,7 @@ dt { margin-top:1em;  }
 dd { margin-left:1em; }
 
 .right_display {
-  height: 100vh;
+  height: 98vh;
   overflow-y: auto;
 }
 

@@ -21,17 +21,20 @@ my $outputDir = "$Bin/../examples";    # where to generate the html files
 my $forceHtml = 0;                     # force html generation regardless of its date
 my $inputFile;                         # generate the html using this input .uds
 
-$inputFile = "$Bin/../uds/indent_braces.uds";  #### DEBUG !!!
+# $inputFile = "$Bin/../uds/indent_braces.uds";  #### DEBUG !!!
 
 #
 # The expected file layout is
 #    base/
 #     +->uds/
-#        +-> *.uds             <-- inputDir/..  (tuned uds hidding version in inputDir)
-#        +->default
-#            +->*.uds          <-- inputDir     (auto generated uds)
+#     |   +-> *.uds             <-- inputDir/..  (tuned uds hidding version in inputDir)
+#     |   +->default
+#     |       +->*.uds          <-- inputDir     (auto generated uds)
+#     +->examples               <-- outputDir
+#     |    +-> *.ex.html
+#     +->options
+#          +-> *.html
 #
-
 
 # Nom du script (sans .pl) utilisé dans les messages d'erreur
 $Script =~ s/^(.+)\.pl$/$1/i;
@@ -61,17 +64,17 @@ sub getBlock {
     ${$refResult} = ($str =~ /^\s*$/) ? '' : $str;
     return $line;
 }
-                
-sub loadUDS {
-    my $path = shift;
-    (my $optName = $path) =~ s!^.*?([^/]+)\.uds$!$1!;
-    print "Option $optName from $path\n";
 
-    open(my $fh, '<', $path)
-      || Fatal("Cannot open file '$path'\n$!");
+sub loadUDS {
+    my $udsFile = shift;
+    (my $optKey = $udsFile) =~ s!^.*?([^/]+)\.uds$!$1!;
+    say "Option $optKey from $udsFile";
+
+    open(my $fh, '<', $udsFile)
+      || Fatal("Cannot open uds file '$udsFile'\n$!");
 
     my %uds = (
-      path    => $path,
+      path    => $udsFile,
     );
 
     my $line;
@@ -86,11 +89,11 @@ sub loadUDS {
             }elsif( $action eq 'NAME'  ){
                 # This is a double check to be sure that the name of the file and its contain are inline.
                 # Example: '==== NAME: align_func_params'
-                if( $param ne $optName ){
-                    SayError("Name '$param' doesn't match with '$optName' in file name: $path");
+                if( $param ne $optKey ){
+                    SayError("Name '$param' doesn't match with '$optKey' in uds file name: $udsFile");
                     return;
                 }
-                $uds{name}=$optName;
+                $uds{optKey}=$optKey;
                 # optional block description
                 $line = getBlock($fh, \$uds{desc});
                 $line ? redo : last;
@@ -100,14 +103,14 @@ sub loadUDS {
                 $lang = "CPP" if $lang eq 'C++';
                 $lang = "CS"  if $lang eq 'C#';
                 if( $lang !~ /^(C|CPP|D|CS|JAVA|PAWN|OC|OC+|VALA)$/ ){
-                    SayError("'$param' is un invalid language in file '$path'");
+                    SayError("'$param' is un invalid language in uds file '$udsFile'");
                     return;
                 }
                 $uds{lang} = $lang;
                 # mandatory block of code
                 $line = getBlock($fh, \$uds{code});
                 unless( $uds{code} ){
-                    SayError("'CODE' is empty in file '$path'");
+                    SayError("'CODE' is empty in uds file '$udsFile'");
                     return;
                 }
                 $line ? redo : last;
@@ -115,38 +118,38 @@ sub loadUDS {
                 # Example: '==== SET align_func_params=false align_keep_tabs=false'
                 # Check that $param is a list of 'key=value'
                 if( $param =~ /^\s*$/ ){
-                    SayError("Empty SET in file '$path'");
+                    SayError("Empty SET in uds file '$udsFile'");
                     return;
                 }
                 for my $kv ( split(/\s+/, $param) ){
                     next if $kv =~ /^\w+=\w+$/;
-                    SayError("Invalid SET '$kv' in file '$path'");
+                    SayError("Invalid SET '$kv' in uds file '$udsFile'");
                     return;
                 }
                 push(@{$uds{set}}, $param);
             }elsif( $action eq 'TRACK' ){
                 if( $param !~ /^(nl|space|start)$/ ){
-                    SayError("'$param' is an invalid tracking mode in file '$path'");
+                    SayError("'$param' is an invalid tracking mode in uds file '$udsFile'");
                     return;
                 }
                 push @{$uds{tracking}}, $param;
             }else{
-                SayError("'==== $action' is not a valid action in file '$path'");
+                SayError("'==== $action' is not a valid action in uds file '$udsFile'");
                 return;
             }
         }else{
-            SayError("Invalid line: '$line' in file '$path'");
+            SayError("Invalid line: '$line' in uds file '$udsFile'");
             return;
         }
     }
     close($fh);
 
     my $errMsg = '';
-    $errMsg .= "  '==== NAME' is missing\n" unless $uds{name};
+    $errMsg .= "  '==== NAME' is missing\n" unless $uds{optKey};
     $errMsg .= "  '==== CODE' is missing\n" unless $uds{code};
     $errMsg .= "  '==== SET'  is missing\n" unless $uds{set};
     if( $errMsg ){
-        SayError( "Missing section in '$path':\n$errMsg\n");
+        SayError( "Missing section in '$udsFile':\n$errMsg\n");
         return;
     }
     
@@ -156,9 +159,11 @@ sub loadUDS {
     return \%uds;
 }
 
+
 sub execUDS {
-    my $path = shift;
-    my $uds = loadUDS($path);  # return ref to a hash, undef if error.
+    my $udsFile  = shift;   # input file
+    my $htmlFile = shift;   # output file
+    my $uds = loadUDS($udsFile);  # return ref to a hash, undef if error.
     return unless $uds;
 
     my $tmpFile = ($ENV{TMP} || $ENV{TEMP}) . "/uncrustify.tmp";
@@ -170,7 +175,8 @@ sub execUDS {
     my %results;
     for my $set (@{$uds->{set}}){
         # build the list --set opt1Name=opt1Value --set opt2Name=opt2Value
-        my $setList = join(' ', map("--set $_", split(/\s+/, $set)));
+        my $setList = '--set indent_with_tabs=0 --set indent_columns=4 '
+                    . join(' ', map("--set $_", split(/\s+/, $set)));
         my $cmd = "$ucBin -c - $setList -l $uds->{lang} -f $tmpFile";
         my $result;
         if( open(my $pipe, "$cmd |") ){
@@ -181,15 +187,15 @@ sub execUDS {
             close($pipe);
             $results{$set} = $result || "ERROR executing pipe '$cmd | ...'";
         }else{
-            SayError("Cannot execute pipe '$cmd | ...'");
+            SayError("Cannot execute pipe '$cmd | ...'\n$!");
         }
     }
 
-    my $optName = $uds->{name};
+    my $optKey = $uds->{optKey};
 
     ## In description substitute `xx` by
-    ## <ins class="xx" alt="optName"></ins>
-    $uds->{desc} =~ s!`(\w+)`!<ins class="$1" alt="$optName"></ins>!g;
+    ## <ins class="xx" alt="optKey"></ins>
+    $uds->{desc} =~ s!`(\w+)`!<ins class="$1" alt="$optKey"></ins>!g;
 
     # Generate the table 
     #   | raw code | option_name=value1 | option_name=value2 | 
@@ -199,14 +205,14 @@ sub execUDS {
 
     my $tblHeader = qq(  <th>raw code</th>\n);
     my $tblBody   = qq(<td class="code">$uds->{code}</td>\n);
-    for my $set (sort keys %results){
+    for my $set (@{$uds->{set}}){  # To preserve original order do not use (sort keys %results)
         $set =~ s!\s+!<br/>!g;
         $tblHeader .= qq(  <th>$set</th>\n);
         $tblBody   .= qq(<td class="code">$results{$set}</td>\n);
     }
 
-    ##  generate the html file <optName>.ex.html
-    my $htmlFile = "$outputDir/$optName.ex.html";
+    ##  generate the html file <optKey>.ex.html
+    say "Writting $htmlFile";
     open(my $html_fh, '>', $htmlFile)
       || Fatal("Cannot create -ex.html file $htmlFile\n$!");
 
@@ -215,7 +221,7 @@ sub execUDS {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Example for $optName</title>
+  <title>Example for $optKey</title>
   <link rel="stylesheet" href="../static/uncrustify.css">
   <link rel="stylesheet" href="../static/ins_tooltip.css">
 </head>
@@ -255,10 +261,10 @@ $ucBin  = "${binDir}uncrustify.exe";
 my $err=0;
 if( $binDir ){
     if( ! -d $binDir ){
-        SayError("Path '$binDir' doesn't exist.");
+        SayError("Path --bindir $binDir doesn't exist.");
         $err++;
     }elsif( ! -e $ucBin ){
-        SayError("File '$ucBin' doesn't exist.");
+        SayError("Uncrustify binary $ucBin doesn't exist.");
         $err++;
     }
 }else{
@@ -266,9 +272,19 @@ if( $binDir ){
     $err++;
 }
 
+if( $inputDir ){
+    if( ! -d $inputDir ){
+        Error("Path --inputdir '$inputDir' doesn't exist.");
+        $err++;
+    }
+}else{
+    Error("Path --inputDir is not defined.");
+    $err++;
+}
+
 if( $outputDir ){
     if( ! -d $outputDir ){
-        SayError("Path '$outputDir' doesn't exist.");
+        SayError("Path --outputdir $outputDir doesn't exist.");
         $err++;
     }
 }else{
@@ -297,20 +313,20 @@ opendir(my $dh, $inputDir)
 
 while( my $file = readdir($dh) ){
    next if $file =~ /^\./;
-   my $udsPath = "$inputDir/$file";
-   next unless -f $udsPath;
-   next unless $udsPath =~ /\.uds$/;
+   next unless $file =~ /^(.+)\.uds$/;
+   my $optKey = $1;
+   my $udsFile = "$inputDir/$file";
+   next unless -f $udsFile;
    # If this file also exist in the parent directory use it.
-   my $udsParentPath = "$inputDir/../$file";
-   $udsPath = $udsParentPath if -f $udsParentPath;
+   my $udsParentFile = "$inputDir/../$file";
+   $udsFile = $udsParentFile if -f $udsParentFile;
    # Do nothing if corresponding html file is younger
-   my $htmlPath = "$outputDir/$file.ex.html";
-   if( $forceHtml || ((stat($htmlPath))[9] < (stat($udsPath))[9]) ){
-       execUDS($udsPath);
+   my $htmlFile = "$outputDir/$optKey.ex.html";
+   if( (! -f $htmlFile) || $forceHtml || ((stat($htmlFile))[9] < (stat($udsFile))[9]) ){
+       execUDS($udsFile, $htmlFile);
    }else{
-       say "$file.exe.html is already uptodate";
+       say "$file.ex.html is already uptodate";
    }
-
 }
 
 close($dh);
