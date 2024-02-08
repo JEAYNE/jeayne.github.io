@@ -19,7 +19,7 @@ my $binDir    =  $Bin;                  # where to find the uncrustify binary
 my $outputDir = "$Bin/../uds/default";  # where to generated the .uds (Uncrustify Documentation Script) files
 my @optKeys;
 
-# Nom du script (sans pl) utilisé dans les messages d'erreur
+# Script name  (without the .pl) used in the error messages
 $Script =~ s/^(.+)\.pl$/$1/i;
 
 GetOptions (

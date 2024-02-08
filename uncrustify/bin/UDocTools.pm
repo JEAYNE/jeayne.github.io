@@ -4,8 +4,9 @@ use v5.36;
 use strict;
 
 use parent 'Exporter';
-our @EXPORT    = qw(SayDebug SayInfo SayWarning SayError Fatal);
-our @EXPORT_OK = qw(dumpit getOption loadOptionDescriptions);
+our @EXPORT_OK = qw(SayDebug SayInfo SayWarning SayError Fatal
+                    getOption loadOptionDescriptions
+                    dumpit slurpFile);
 
 ### Subroutines to display a message with various levels of severity
 
@@ -30,6 +31,16 @@ sub Fatal {
   die "\n";
 }
 
+#
+# Usages
+#  my $allLine = slurpFile('/etc/passwd'); empty ==> $allLine=='';        error ==> $allFile==undef;
+#  my @byLine  = slurpFile('/etc/passwd'); empty ==> scalar(@byLine)==0;  error ==> $byLine[0]==undef;
+sub slurpFile {
+  local $/ = undef unless wantarray;
+  open(my $fh, '<', $_[0]) || return undef;
+  return <$fh>;
+  # Perl will automatically close $fh
+}
 
 #
 # Usages:

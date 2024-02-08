@@ -1,6 +1,7 @@
-body {
-  background-color: black;
-  color:white;
+:root {
+  color-scheme: light dark;
+  a:visited {  color: lime;    }
+  a:hover   {  color: hotpink; }
 }
 
 .left_scroll {
