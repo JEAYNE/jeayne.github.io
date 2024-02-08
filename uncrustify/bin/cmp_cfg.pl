@@ -82,7 +82,7 @@ my $header = "<th>Options</th>\n"
            . "<th>default</th>\n";
 for my $file (@ARGV){
     (my $name = $file) =~ s!^.*?([^/\\]+)$!$1!;
-    $header .= "<th>$name</th>\n";
+    $header .= qq(<th><a href="cfg/$name">$name</a></th>\n);
 }
 
 ### build body
@@ -93,10 +93,10 @@ if( $byName ){
     for my $optKey (sort keys %{$options}){
         next if $optKey eq 'header';
         my $default = $options->{$optKey}{ValueDefault};
-        my $tr = "<td>$optKey</td>\n"
-               . "<td>$default</td>\n";
+        my $tr = qq(<td><a href="options/$optKey.html" target="option">$optKey</a></td>\n)
+               . qq(<td><b>$default</b></td>\n);
         for my $file (@ARGV){
-            my $optVal = $cfg{$file}{$optKey} || '';
+            my $optVal = $cfg{$file}{$optKey} // '';
             if( ($optVal eq '') || ($optVal eq $default) ){
                 $tr .= "<td></td>\n";
             }else{
@@ -124,15 +124,17 @@ if( $byCategory ){
     }
     my $nCol = @ARGV + 2;
 
-    for my $catName (sort keys %categories){
+    my @sortedCategories = grep {! /^General/} (sort keys %categories);
+    unshift(@sortedCategories, 'General options');
+    for my $catName (@sortedCategories){
         $bodyCategory .= qq(<td colspan="$nCol" style="background-color: DimGray;"><h3>$catName</h3></td>\n);
         for my $optKey (@{$categories{$catName}}){
             next if $optKey eq 'header';
             my $default = $options->{$optKey}{ValueDefault};
-            my $tr = "<td>$optKey</td>\n"
-                   . "<td>$default</td>\n";
+            my $tr = qq(<td><a href="options/$optKey.html" target="option">$optKey</a></td>\n)
+                   . qq(<td><b>$default</b></td>\n);
             for my $file (@ARGV){
-                my $optVal = $cfg{$file}{$optKey} || '';
+                my $optVal = $cfg{$file}{$optKey} // '';
                 if( ($optVal eq '') || ($optVal eq $default) ){
                     $tr .= "<td></td>\n";
                 }else{
@@ -159,10 +161,36 @@ print $fh qq{
   <meta charset="utf-8">
   <title>Comparison of Uncrustify configurations</title>
   <style>
-    :root { color-scheme: light dark; }
+    :root {
+        color-scheme: dark; 
+        a:visited { color: lime;    }
+        a:hover   { color: hotpink; }
+    }
+    th, td { 
+      padding-left: 10px; 
+      padding-right: 10px; 
+      border: 0px;
+    }
+    tr:nth-child(even) {
+      background-color: rgba(50, 100, 100, 0.3); 
+    }
+    th:nth-child(even),td:nth-child(even) {
+      background-color: rgba(50, 100, 100, 0.3);
+    }
+    tr:hover {
+      background-color: black; 
+      td {
+        border-top:    1px dotted red;
+        border-bottom: 1px dotted red;
+      }
+    }
   </style>
 </head>
-<body style=":root {color-scheme: light dark;}">
+<body>
+<p>
+<h3>This page is part of the <a href="index.html"><b>U</b>ncrustify <b>D</b>ocumentaion <b>P</b>roject</a></h3>
+<hr>
+</p>
 };
 
 print $fh qq{
@@ -171,9 +199,8 @@ print $fh qq{
 $header</tr>
 $bodyName
 </table>
+<br/><br/>
 } if $byName;
-
-print $fh "<p><hr></p>\n" if $byName && $byCategory;
 
 print $fh qq{
 <h1>Comparison sorted by category</h1>
@@ -181,6 +208,7 @@ print $fh qq{
 $header</tr>
 $bodyCategory
 </table>
+<br/><br/>
 } if $byCategory;
 
 print $fh qq{
