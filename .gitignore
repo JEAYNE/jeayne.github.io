@@ -1,4 +1,1 @@
-# ignore for the moment
-uncrustify/options/*.html
-
-uncrustify/_*
+_*
